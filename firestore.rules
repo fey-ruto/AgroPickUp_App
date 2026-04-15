@@ -1,0 +1,257 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return getUserRole() == 'admin';
+    }
+
+    function isFarmer() {
+      return getUserRole() == 'farmer';
+    }
+
+    function userExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function isTenDigitPhone(phone) {
+      return phone is string && phone.matches('^[0-9]{10}$');
+    }
+
+    function isValidRole(role) {
+      return role in ['farmer', 'admin', 'driver'];
+    }
+
+    function validUserCreate(data) {
+      return data.keys().hasOnly(['fullName', 'phoneNumber', 'role', 'farmName', 'region', 'fcmToken', 'createdAt']) &&
+        data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 80 &&
+        isTenDigitPhone(data.phoneNumber) &&
+        isValidRole(data.role) &&
+        data.createdAt is timestamp &&
+        (
+          (data.role == 'farmer' &&
+            data.farmName is string && data.farmName.size() > 0 && data.farmName.size() <= 80 &&
+            data.region is string && data.region.size() > 0 && data.region.size() <= 50) ||
+          (data.role != 'farmer' &&
+            (!('farmName' in data) || data.farmName == null) &&
+            (!('region' in data) || data.region == null))
+        ) &&
+        (!('fcmToken' in data) || data.fcmToken == null || (data.fcmToken is string && data.fcmToken.size() <= 256));
+    }
+
+    function validUserUpdate(existing, data) {
+      return data.keys().hasOnly(['fullName', 'phoneNumber', 'role', 'farmName', 'region', 'fcmToken', 'createdAt']) &&
+        data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 80 &&
+        isTenDigitPhone(data.phoneNumber) &&
+        data.role == existing.role &&
+        data.createdAt == existing.createdAt &&
+        (
+          (existing.role == 'farmer' &&
+            data.farmName is string && data.farmName.size() > 0 && data.farmName.size() <= 80 &&
+            data.region is string && data.region.size() > 0 && data.region.size() <= 50) ||
+          (existing.role != 'farmer' &&
+            (!('farmName' in data) || data.farmName == null) &&
+            (!('region' in data) || data.region == null))
+        ) &&
+        (!('fcmToken' in data) || data.fcmToken == null || (data.fcmToken is string && data.fcmToken.size() <= 256));
+    }
+
+    function validPickupRequestCreate(data) {
+      return data.keys().hasOnly([
+        'farmerId', 'farmerName', 'farmerPhone', 'aggregatorId', 'aggregatorName',
+        'collectionPointId', 'collectionPointName', 'adminContactPhone', 'assignedDriverId',
+        'produceType', 'quantity', 'status', 'requestedDate', 'scheduledDate', 'photoUrl',
+        'notes', 'adminNotes', 'isSynced', 'createdAt', 'updatedAt'
+      ]) &&
+        data.farmerId == request.auth.uid &&
+        data.farmerName is string && data.farmerName.size() > 0 && data.farmerName.size() <= 80 &&
+        (!('farmerPhone' in data) || data.farmerPhone == null || isTenDigitPhone(data.farmerPhone)) &&
+        data.aggregatorId is string && data.aggregatorId.size() > 0 && isAggregatorUser(data.aggregatorId) &&
+        (!('aggregatorName' in data) || data.aggregatorName == null || (data.aggregatorName is string && data.aggregatorName.size() <= 80)) &&
+        data.collectionPointId is string && data.collectionPointId.size() > 0 && data.collectionPointId.size() <= 100 &&
+        data.collectionPointName is string && data.collectionPointName.size() > 0 && data.collectionPointName.size() <= 100 &&
+        data.produceType is string && data.produceType.size() > 0 && data.produceType.size() <= 80 &&
+        data.quantity is number && data.quantity > 0 && data.quantity <= 10000 &&
+        data.status == 'submitted' &&
+        data.requestedDate is timestamp &&
+        (!('scheduledDate' in data) || data.scheduledDate == null) &&
+        (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048)) &&
+        (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 500)) &&
+        (!('adminNotes' in data) || data.adminNotes == null) &&
+        (!('assignedDriverId' in data) || data.assignedDriverId == null) &&
+        (!('adminContactPhone' in data) || data.adminContactPhone == null) &&
+        data.isSynced is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function validPickupRequestAdminUpdate(existing, data) {
+      return data.keys().hasOnly([
+        'farmerId', 'farmerName', 'farmerPhone', 'aggregatorId', 'aggregatorName',
+        'collectionPointId', 'collectionPointName', 'adminContactPhone', 'assignedDriverId',
+        'produceType', 'quantity', 'status', 'requestedDate', 'scheduledDate', 'photoUrl',
+        'notes', 'adminNotes', 'isSynced', 'createdAt', 'updatedAt'
+      ]) &&
+        existing.aggregatorId == request.auth.uid &&
+        data.farmerId == existing.farmerId &&
+        data.aggregatorId == existing.aggregatorId &&
+        data.collectionPointId == existing.collectionPointId &&
+        data.collectionPointName == existing.collectionPointName &&
+        data.farmerName == existing.farmerName &&
+        data.farmerPhone == existing.farmerPhone &&
+        data.produceType == existing.produceType &&
+        data.quantity == existing.quantity &&
+        data.requestedDate == existing.requestedDate &&
+        data.photoUrl == existing.photoUrl &&
+        data.notes == existing.notes &&
+        data.createdAt == existing.createdAt &&
+        data.status in ['accepted', 'scheduled', 'pickedUp', 'completed', 'cancelled'] &&
+        (!('adminNotes' in data) || data.adminNotes == null || (data.adminNotes is string && data.adminNotes.size() <= 1000)) &&
+        (!('assignedDriverId' in data) || data.assignedDriverId == null || (data.assignedDriverId is string && data.assignedDriverId.matches('^[A-Za-z0-9][A-Za-z0-9\\s\\-_/]{0,39}$'))) &&
+        (!('adminContactPhone' in data) || data.adminContactPhone == null || isTenDigitPhone(data.adminContactPhone)) &&
+        (!('scheduledDate' in data) || data.scheduledDate == null || data.scheduledDate is timestamp) &&
+        data.updatedAt is timestamp &&
+        data.isSynced is bool;
+    }
+
+    function validPickupRequestFarmerCancel(existing, data) {
+      return data.keys().hasOnly([
+        'farmerId', 'farmerName', 'farmerPhone', 'aggregatorId', 'aggregatorName',
+        'collectionPointId', 'collectionPointName', 'adminContactPhone', 'assignedDriverId',
+        'produceType', 'quantity', 'status', 'requestedDate', 'scheduledDate', 'photoUrl',
+        'notes', 'adminNotes', 'isSynced', 'createdAt', 'updatedAt'
+      ]) &&
+        existing.farmerId == request.auth.uid &&
+        data.farmerId == existing.farmerId &&
+        data.aggregatorId == existing.aggregatorId &&
+        data.collectionPointId == existing.collectionPointId &&
+        data.collectionPointName == existing.collectionPointName &&
+        data.farmerName == existing.farmerName &&
+        data.farmerPhone == existing.farmerPhone &&
+        data.produceType == existing.produceType &&
+        data.quantity == existing.quantity &&
+        data.requestedDate == existing.requestedDate &&
+        data.photoUrl == existing.photoUrl &&
+        data.notes == existing.notes &&
+        data.adminNotes == existing.adminNotes &&
+        data.assignedDriverId == existing.assignedDriverId &&
+        data.adminContactPhone == existing.adminContactPhone &&
+        data.createdAt == existing.createdAt &&
+        data.status == 'cancelled' &&
+        data.updatedAt is timestamp &&
+        data.isSynced is bool;
+    }
+
+    function validCollectionPoint(data) {
+      return data.keys().hasOnly([
+        'name', 'address', 'region', 'ownerAdminId', 'ownerAdminName', 'latitude',
+        'longitude', 'facilities', 'contactPhone', 'operatingHours', 'isActive', 'createdAt'
+      ]) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.address is string && data.address.size() > 0 && data.address.size() <= 200 &&
+        data.region is string && data.region.size() > 0 && data.region.size() <= 50 &&
+        data.ownerAdminId is string && data.ownerAdminId.size() > 0 && isAggregatorUser(data.ownerAdminId) &&
+        (!('ownerAdminName' in data) || data.ownerAdminName == null || (data.ownerAdminName is string && data.ownerAdminName.size() <= 80)) &&
+        data.latitude is number && data.latitude >= -90 && data.latitude <= 90 &&
+        data.longitude is number && data.longitude >= -180 && data.longitude <= 180 &&
+        (!('facilities' in data) || data.facilities == null || (data.facilities is string && data.facilities.size() <= 200)) &&
+        (!('contactPhone' in data) || data.contactPhone == null || isTenDigitPhone(data.contactPhone)) &&
+        (!('operatingHours' in data) || data.operatingHours == null || (data.operatingHours is string && data.operatingHours.matches('^\\d{1,2}:\\d{2}\\s?-\\s?\\d{1,2}:\\d{2}$'))) &&
+        data.isActive is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isAggregatorUser(userId) {
+      return userExists(userId) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
+    }
+    
+    match /superadmins/{email} {
+      allow read: if true;
+    }
+    match /superadmin_activity/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    function requestDoc(requestId) {
+      return get(/databases/$(database)/documents/pickupRequests/$(requestId)).data;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId) && validUserCreate(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && validUserUpdate(resource.data, request.resource.data);
+    }
+
+    match /pickupRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.farmerId == request.auth.uid ||
+        (isAdmin() && resource.data.aggregatorId == request.auth.uid)
+      );
+
+      allow create: if isAuthenticated() && isFarmer() && validPickupRequestCreate(request.resource.data);
+
+      allow update: if isAuthenticated() && (
+        (
+          isAdmin() &&
+          validPickupRequestAdminUpdate(resource.data, request.resource.data)
+        ) ||
+        (
+          validPickupRequestFarmerCancel(resource.data, request.resource.data)
+        )
+      );
+    }
+
+    match /collectionPoints/{pointId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isAdmin() && validCollectionPoint(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId is string &&
+        request.resource.data.userId.size() > 0 &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.title.size() <= 120 &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() > 0 &&
+        request.resource.data.message.size() <= 500 &&
+        (
+          request.resource.data.userId == request.auth.uid ||
+          (
+            request.resource.data.requestId is string &&
+            request.resource.data.requestId.size() > 0 &&
+            exists(/databases/$(database)/documents/pickupRequests/$(request.resource.data.requestId)) &&
+            (
+              (
+                requestDoc(request.resource.data.requestId).aggregatorId == request.auth.uid &&
+                request.resource.data.userId == requestDoc(request.resource.data.requestId).farmerId
+              ) ||
+              (
+                requestDoc(request.resource.data.requestId).farmerId == request.auth.uid &&
+                request.resource.data.userId == requestDoc(request.resource.data.requestId).aggregatorId
+              )
+            )
+          )
+        );
+
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

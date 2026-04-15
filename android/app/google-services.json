@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "45052516524",
+    "firebase_url": "https://agropick-gh-default-rtdb.firebaseio.com",
+    "project_id": "agropick-gh",
+    "storage_bucket": "agropick-gh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:45052516524:android:b5740ca19cf4b3e6f46709",
+        "android_client_info": {
+          "package_name": "com.example.agro_pickgh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZdW5ovIWhaYvUm3NZTsCOZefQrqNILBo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
