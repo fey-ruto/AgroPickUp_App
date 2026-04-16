@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return getUserRole() == 'admin';
+    }
+    function isFarmer() {
+      return getUserRole() == 'farmer';
+    }
+    match /superadmins/{email} {
+      allow read: if true;
+    }
+    match /superadmin_activity/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+    }
+    match /pickupRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.farmerId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated() && isFarmer();
+      allow update: if isAuthenticated() && (
+        resource.data.farmerId == request.auth.uid || isAdmin()
+      );
+    }
+    match /collectionPoints/{pointId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isAdmin();
+      allow delete: if false;
+    }
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
